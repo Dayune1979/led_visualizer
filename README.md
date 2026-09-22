@@ -34,9 +34,11 @@ npx --yes serve .
 
 ## Deployment
 
-GitHub Pages, Quelle `main` / root. Danach ist die Seite unter
-`https://<user>.github.io/<repo>/` erreichbar und laesst sich am Handy
-ueber "Zum Startbildschirm hinzufuegen" installieren.
+Laeuft auf GitHub Pages, Quelle `main` / root:
+
+**https://dayune1979.github.io/led_visualizer/**
+
+Am Handy ueber "Zum Startbildschirm hinzufuegen" installierbar.
 
 Nach einem Deploy die Version in `sw.js` hochzaehlen (`var VERSION`),
 sonst haelt ein bereits installierter Client seinen alten Cache.
@@ -44,6 +46,6 @@ sonst haelt ein bereits installierter Client seinen alten Cache.
 ## Offen
 
 - Demo-Modus: Presets ueber URL-Hash, Attract-Modus, Wake Lock, Vollbild
-- Schriften liegen bei Google Fonts; offline greift der Fallback-Font
+- echter Offline-Test am Geraet (Flugmodus) steht aus
 - echte WLED-Steuerung per JSON-API (Achtung: HTTPS-Seite kann kein
   `http://`-Geraet im LAN ansprechen — Mixed Content)
