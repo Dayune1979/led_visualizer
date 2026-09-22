@@ -2,8 +2,17 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>LED Unikate — WLED</title>
+<meta name="description" content="Visualisierung von LED-Unikaten und WLED-Effekten">
+<meta name="theme-color" content="#080b0f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LED Unikate">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&family=DM+Sans:wght@400;500;600&display=swap');
 :root{
@@ -64,7 +73,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',system-ui,sans-
   display:flex;align-items:center;justify-content:center;
   background:var(--bg);
 }
-#cvs{display:block;cursor:grab;position:absolute;top:0;left:0}
+#cvs{display:block;cursor:grab;position:absolute;top:0;left:0;touch-action:none}
 #cvs:active{cursor:grabbing}
 .fx-name-overlay{
   position:absolute;top:12px;left:50%;transform:translateX(-50%);
@@ -306,6 +315,55 @@ input[type=color].solid-picker{
   cursor:pointer;font-family:'Space Mono',monospace;white-space:nowrap;transition:all .15s;
 }
 .solid-apply:hover{background:rgba(232,160,64,.12)}
+
+/* ============================================================
+   BOTTOM SHEET (nur mobil sichtbar) + MOBILES LAYOUT
+   ============================================================ */
+.sheet-handle{
+  display:none;align-items:center;justify-content:center;gap:10px;
+  height:40px;flex-shrink:0;cursor:pointer;user-select:none;
+  background:var(--surf2);border-bottom:1px solid var(--brd);
+  color:var(--lbl);font-size:11px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;font-family:'Space Mono',monospace;
+}
+.sheet-handle .caret{transition:transform .25s ease;font-size:10px;color:var(--acc)}
+body.sheet-open .sheet-handle .caret{transform:rotate(180deg)}
+
+@media (max-width:900px){
+  /* Formenleiste: aus der linken Spalte wird ein horizontaler Streifen */
+  .shape-sidebar{
+    top:40px;left:0;right:0;width:auto;height:46px;
+    flex-direction:row;align-items:stretch;
+    border-right:none;border-bottom:1px solid var(--brd);
+    overflow-x:auto;overflow-y:hidden;
+  }
+  .shape-group-label{display:none}
+  .sh-btn{
+    width:auto;flex-shrink:0;white-space:nowrap;padding:6px 13px;
+    border-left:none;border-bottom:2px solid transparent;
+  }
+  .sh-btn.active{border-bottom-color:var(--acc)}
+
+  /* Canvas bekommt die volle Breite, unten bleibt der Sheet-Griff frei */
+  .layout{top:86px;left:0;bottom:40px;grid-template-columns:1fr}
+
+  /* Panel wird zum ausfahrbaren Bottom-Sheet */
+  .right{
+    top:auto;left:0;right:0;bottom:0;width:auto;
+    height:min(62vh,440px);z-index:98;
+    border-left:none;border-top:1px solid var(--brd);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    transform:translateY(calc(100% - 40px));
+    transition:transform .25s ease;
+  }
+  body.sheet-open .right{transform:translateY(0)}
+  /* Sheet offen: der Canvas weicht nach oben aus statt sich zu verstecken */
+  body.sheet-open .layout{bottom:min(62vh,440px)}
+  .sheet-handle{display:flex}
+
+  /* Topbar: die IP braucht den Platz auf 390px nicht */
+  .dev-info{display:none}
+}
 </style>
 </head>
 <body>
@@ -373,6 +431,7 @@ input[type=color].solid-picker{
   </div>
 
   <div class="right">
+    <div class="sheet-handle" id="sheetHandle" onclick="toggleSheet()"><span class="caret">&#9650;</span> Einstellungen</div>
     <div class="seg-selector">
       <div class="sec-mini" id="segSelectorLabel">Aktive Segmente (Shift+Klick = einzeln)</div>
       <div class="seg-chips" id="segChips"></div>
@@ -877,7 +936,7 @@ function buildSphereGeo(nMeridians,ledsPerMeter){
 
 function projectSphere(x,y,z,CW,CH){
   var cx=CW/2,cy=CH/2;
-  var scale=Math.min(CW,CH)*0.38*zoomScale;
+  var scale=Math.min(CW,CH)*0.38*zoomScale*fitBoost;
   /* z=up in our coord, swap to screen: ry=-z, rz=y */
   var rx=x,ry=-z,rz=y;
   var cosX=Math.cos(sphereRotX),sinX=Math.sin(sphereRotX);
@@ -999,7 +1058,7 @@ function getDonutLedPos(ring,led,sh){
 
 function projectDonut(x,y,z,CW,CH){
   var cx=CW/2,cy=CH/2;
-  var scale=Math.min(CW,CH)*0.42*zoomScale;
+  var scale=Math.min(CW,CH)*0.42*zoomScale*fitBoost;
   var cosX=Math.cos(donutRotX),sinX=Math.sin(donutRotX);
   var y2=y*cosX-z*sinX,z2=y*sinX+z*cosX;
   var cosY=Math.cos(donutRotY),sinY=Math.sin(donutRotY);
@@ -1191,9 +1250,9 @@ function buildCubeParallel(){
 }
 
 function projectCube(x,y,z){
-  var CW=canvas.width,CH=canvas.height;
+  var CW=CVW,CH=CVH;
   var cx=CW/2,cy=CH/2;
-  var scale=Math.min(CW,CH)*0.34*zoomScale;
+  var scale=Math.min(CW,CH)*0.34*zoomScale*fitBoost;
   /* swap: Z=up → screen-Y, Y=depth */
   var rx=x,ry=-z,rz=y;
   var cosX2=Math.cos(rotX),sinX2=Math.sin(rotX);
@@ -1390,7 +1449,7 @@ function fbRot(v){
 
 function fbPrj(v,CW,CH){
   var rv=fbRot(v),x=rv[0],y=rv[1],z=rv[2];
-  var s=Math.min(CW,CH)*0.44*zoomScale/(1.1+z*0.25);
+  var s=Math.min(CW,CH)*0.44*zoomScale*fitBoost/(1.1+z*0.25);
   return[CW/2+x*s,CH/2-y*s,z];
 }
 
@@ -1655,10 +1714,27 @@ var FX_MAP={
 var canvas=document.getElementById('cvs');
 var ctx=canvas.getContext('2d');
 
+/* Logische Zeichenflaeche in CSS-Pixeln; der Backing-Store ist um dpr groesser. */
+var CVW=0,CVH=0;
+/* Hochformat: der Koerper darf die schmale Breite staerker ausnutzen, sonst
+   bleibt auf dem Handy oben und unten die halbe Flaeche leer. */
+var fitBoost=1;      /* flaechige Koerper - die fuellen die Breite ohnehin fast aus */
+var fitBoostTall=1;  /* Zylinder-Figuren - die wirken im Hochformat sonst verloren */
+
 function resizeCanvas(){
   var area=document.getElementById('canvasArea');
-  canvas.width=area.clientWidth||Math.max(100,window.innerWidth-460);
-  canvas.height=area.clientHeight||Math.max(100,window.innerHeight-40);
+  CVW=area.clientWidth ||Math.max(100,window.innerWidth-460);
+  CVH=area.clientHeight||Math.max(100,window.innerHeight-40);
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  canvas.width =Math.round(CVW*dpr);
+  canvas.height=Math.round(CVH*dpr);
+  canvas.style.width =CVW+'px';
+  canvas.style.height=CVH+'px';
+  /* width/height zu setzen verwirft die Transform - deshalb erst danach. */
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  var ar=CVH>CVW ? CVH/CVW : 1;
+  fitBoost    =Math.min(1.12,1+(ar-1)*0.20);
+  fitBoostTall=Math.min(1.45,1+(ar-1)*0.45);
 }
 
 /* ---- SHARED 3D ROTATION + PROJECTION ----
@@ -1687,8 +1763,8 @@ function project3D(x,y,z,CW,CH,scale){
 
 /* ---- CYLINDER GEOMETRY ---- */
 function projectCylinder(c,r,sh){
-  var CW=canvas.width,CH=canvas.height;
-  var baseUnit=Math.min(CW,CH)*0.55*zoomScale;
+  var CW=CVW,CH=CVH;
+  var baseUnit=Math.min(CW,CH)*0.55*zoomScale*fitBoostTall;
   var totalRows=sh.bodyRows+sh.topRows;
   var LED_SP=baseUnit/Math.max(totalRows,1)*0.9;
   var R=sh.radius(r)*(baseUnit/320);
@@ -1715,8 +1791,8 @@ function projectCylinder(c,r,sh){
 
 /* ---- HELIX GEOMETRY ---- */
 function projectHelix(h,i,sh){
-  var CW=canvas.width,CH=canvas.height;
-  var baseUnit=Math.min(CW,CH)*0.42*zoomScale;
+  var CW=CVW,CH=CVH;
+  var baseUnit=Math.min(CW,CH)*0.42*zoomScale*fitBoostTall;
   var baseH=baseUnit*1.8;
   var baseR=baseUnit*0.38;
   var frac=i/(sh.dispLeds-1);
@@ -1794,7 +1870,7 @@ var _initialized=false;
 
 function draw(){
   if(!_initialized)return;
-  var CW=canvas.width,CH=canvas.height;
+  var CW=CVW,CH=CVH;
   ctx.clearRect(0,0,CW,CH);
   var leds=[];
   if(currentShape==='sphere'){
@@ -1954,7 +2030,7 @@ function draw(){
       ctx.beginPath();ctx.moveTo(pa.sx,pa.sy);ctx.lineTo(pb.sx,pb.sy);ctx.stroke();
     }
     proj.sort(function(a,b){return a.sz-b.sz});
-    var cubeBaseScale=Math.min(CW,CH)*0.0119*zoomScale; /* absolute size, canvas-relative */
+    var cubeBaseScale=Math.min(CW,CH)*0.0119*zoomScale*fitBoost; /* absolute size, canvas-relative */
     /* halos */
     for(var li=0;li<proj.length;li++){
       var pt=proj[li];
@@ -1982,8 +2058,8 @@ function draw(){
     return;
   } else if(currentShape==='football'){
     if(!fbFaces)fbFaces=buildFbFaces();
-    var CW=canvas.width,CH=canvas.height;
-    var fbR=Math.min(CW,CH)*0.44*zoomScale;
+    var CW=CVW,CH=CVH;
+    var fbR=Math.min(CW,CH)*0.44*zoomScale*fitBoost;
     /* sphere background */
     var bg=ctx.createRadialGradient(CW/2-fbR*.15,CH/2-fbR*.15,fbR*.05,CW/2,CH/2,fbR*1.05);
     bg.addColorStop(0,'#1a1a1a');bg.addColorStop(1,'#060606');
@@ -2166,12 +2242,30 @@ window.addEventListener('mouseup',function(){
   isDragging=false;
   updateRotBtn();
 });
+/* Touch: ein Finger dreht, zwei Finger zoomen. */
+var pinchDist=0;
+function touchDist(t){
+  var dx=t[0].clientX-t[1].clientX,dy=t[0].clientY-t[1].clientY;
+  return Math.sqrt(dx*dx+dy*dy);
+}
 canvas.addEventListener('touchstart',function(e){
-  isDragging=true;
-  dragLastX=e.touches[0].clientX;dragLastY=e.touches[0].clientY;
+  if(e.touches.length>=2){
+    isDragging=false;
+    pinchDist=touchDist(e.touches);
+  }else{
+    isDragging=true;
+    dragLastX=e.touches[0].clientX;dragLastY=e.touches[0].clientY;
+  }
   e.preventDefault();
 },{passive:false});
 window.addEventListener('touchmove',function(e){
+  if(e.touches.length>=2){
+    var d=touchDist(e.touches);
+    if(pinchDist>0)zoom(d/pinchDist);
+    pinchDist=d;
+    e.preventDefault();
+    return;
+  }
   if(!isDragging)return;
   rotY+=(e.touches[0].clientX-dragLastX)*.008;
   rotX+=(e.touches[0].clientY-dragLastY)*.008;
@@ -2179,7 +2273,14 @@ window.addEventListener('touchmove',function(e){
   dragLastX=e.touches[0].clientX;dragLastY=e.touches[0].clientY;
   e.preventDefault();
 },{passive:false});
-window.addEventListener('touchend',function(){
+window.addEventListener('touchend',function(e){
+  if(e.touches.length<2)pinchDist=0;
+  if(e.touches.length===1){
+    /* Ein Finger bleibt liegen: weiterdrehen statt springen. */
+    isDragging=true;
+    dragLastX=e.touches[0].clientX;dragLastY=e.touches[0].clientY;
+    return;
+  }
   if(isDragging)autoRot=false;
   isDragging=false;
   updateRotBtn();
@@ -2913,6 +3014,22 @@ buildShapeBar();
 setShape('pineapple');
 resizeCanvas();
 window.addEventListener('resize',resizeCanvas);
+window.addEventListener('orientationchange',function(){setTimeout(resizeCanvas,250)});
+
+/* ---- Bottom-Sheet (nur mobil sichtbar) ---- */
+function toggleSheet(){
+  document.body.classList.toggle('sheet-open');
+  resizeCanvas();
+}
+
+/* ---- Service Worker: macht die Seite offline- und installierbar ---- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(err){
+      console.warn('SW-Registrierung fehlgeschlagen:',err);
+    });
+  });
+}
 updateRotBtn();
 _initialized=true;
 labInitUI();
