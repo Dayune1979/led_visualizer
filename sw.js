@@ -2,7 +2,7 @@
    Strategie: Navigation network-first (damit ein Deploy ankommt),
    alles andere cache-first mit opportunistischem Nachcachen. */
 
-var VERSION = 'v1';
+var VERSION = 'v2';
 var CACHE   = 'led-unikate-' + VERSION;
 
 var ASSETS = [
@@ -52,7 +52,12 @@ self.addEventListener('fetch', function (e) {
         /* Eigene Dateien und die Google-Schriften mitnehmen,
            damit es offline nicht nackt aussieht. */
         var sameOrigin = req.url.indexOf(self.location.origin) === 0;
-        if (res.ok && (sameOrigin || req.url.indexOf('fonts.g') !== -1)) {
+        /* Das Stylesheet von fonts.googleapis.com kommt per @import als
+           no-cors-Anfrage und damit opaque zurueck: status 0, res.ok false.
+           Wer nur res.ok prueft, cacht die woff2-Dateien, aber nie die CSS,
+           die sie einbindet - offline greift dann doch der Fallback-Font. */
+        var brauchbar = res.ok || res.type === 'opaque';
+        if (brauchbar && (sameOrigin || req.url.indexOf('fonts.g') !== -1)) {
           var copy = res.clone();
           caches.open(CACHE).then(function (c) { c.put(req, copy); });
         }
