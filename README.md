@@ -43,9 +43,32 @@ Am Handy ueber "Zum Startbildschirm hinzufuegen" installierbar.
 Nach einem Deploy die Version in `sw.js` hochzaehlen (`var VERSION`),
 sonst haelt ein bereits installierter Client seinen alten Cache.
 
+## Vorfuehren
+
+Die Knopfleiste am rechten Rand des Canvas:
+
+| | |
+|---|---|
+| ▶ | Vorfuehrmodus - wechselt alle 18 Sekunden die Form, nach einer vollen Runde den Effekt |
+| Kette | Link zur aktuellen Ansicht in die Zwischenablage |
+| Rahmen | Vollbild (nur wo der Browser es unterstuetzt; iOS hat es nicht) |
+
+Der Zustand steht im Hash und laesst sich teilen:
+
+```
+https://dayune1979.github.io/led_visualizer/#shape=cube&fx=cPride2015&pal=cubePal&mode=parallel&spd=9
+```
+
+Schluessel: `shape`, `fx`, `pal`, `mode` (Helix P/M, Cube linear/parallel,
+Fussball-Verdrahtung), `spd`, `bri`. Unbekannte Effekte oder Paletten werden
+ignoriert statt angewendet. Lab-Effekte und Solid-Farben traegt der Hash
+nicht - die haengen an Einstellungen, die dort nicht hineinpassen.
+
+Waehrend der Vorfuehrung haelt ein Wake Lock den Bildschirm wach, sofern das
+Geraet ihn gewaehrt.
+
 ## Offen
 
-- Demo-Modus: Presets ueber URL-Hash, Attract-Modus, Wake Lock, Vollbild
-- echter Offline-Test am Geraet (Flugmodus) steht aus
 - echte WLED-Steuerung per JSON-API (Achtung: HTTPS-Seite kann kein
   `http://`-Geraet im LAN ansprechen — Mixed Content)
+- Lab-Effekte lassen sich nicht per Link teilen
