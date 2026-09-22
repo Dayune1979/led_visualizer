@@ -2,7 +2,7 @@
    Strategie: Navigation network-first (damit ein Deploy ankommt),
    alles andere cache-first mit opportunistischem Nachcachen. */
 
-var VERSION = 'v2';
+var VERSION = 'v3';
 var CACHE   = 'led-unikate-' + VERSION;
 
 var ASSETS = [

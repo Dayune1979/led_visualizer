@@ -19,15 +19,22 @@
   --bg:#080b0f;--surf:#0e1318;--surf2:#141c24;--brd:#1c2a38;--brd2:#2a3e54;
   --txt:#c8d4de;--lbl:#8ab0c8;--muted:#3a5068;
   --acc:#e8a040;--green:#3dc87a;
+  /* Notch und Home-Indicator: auf Geraeten ohne beides sind das 0px. */
+  --sat:env(safe-area-inset-top,0px);
+  --sab:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
 body{background:var(--bg);color:var(--txt);font-family:'DM Sans',system-ui,sans-serif;font-size:13px}
 
 .topbar{
-  position:fixed;top:0;left:0;right:0;height:40px;z-index:100;
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  height:calc(40px + var(--sat));
   background:#0a0e14;border-bottom:1px solid var(--brd);
-  display:flex;align-items:center;justify-content:space-between;padding:0 16px;
+  display:flex;align-items:center;justify-content:space-between;
+  /* Die Shorthand muss den Notch-Abstand tragen - ein separates padding-top
+     davor wuerde sie ueberschreiben. */
+  padding:var(--sat) 16px 0;
 }
 .wled-logo{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--acc);letter-spacing:.1em;line-height:1}
 .dev-info{font-size:11px;color:var(--muted);margin-left:10px;font-style:italic}
@@ -38,7 +45,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',system-ui,sans-
 .fps-disp{font-size:10px;color:var(--muted);font-family:'Space Mono',monospace}
 
 .shape-sidebar{
-  position:fixed;top:40px;left:0;bottom:0;width:160px;z-index:99;
+  position:fixed;top:calc(40px + var(--sat));left:0;bottom:0;width:160px;z-index:99;
   background:#0a0e14;border-right:1px solid var(--brd);
   display:flex;flex-direction:column;overflow-y:auto;
   scrollbar-width:thin;scrollbar-color:var(--brd2) transparent;
@@ -63,7 +70,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',system-ui,sans-
 .sh-emoji{font-size:16px;line-height:1;flex-shrink:0}
 
 .layout{
-  position:fixed;top:40px;left:160px;right:0;bottom:0;
+  position:fixed;top:calc(40px + var(--sat));left:160px;right:0;bottom:0;
   display:grid;grid-template-columns:1fr 300px;
 }
 
@@ -116,7 +123,7 @@ body{background:var(--bg);color:var(--txt);font-family:'DM Sans',system-ui,sans-
 
 /* right panel */
 .right{
-  position:fixed;top:40px;right:0;bottom:0;width:300px;
+  position:fixed;top:calc(40px + var(--sat));right:0;bottom:0;width:300px;
   background:var(--surf);border-left:1px solid var(--brd);
   display:flex;flex-direction:column;overflow:hidden;
 }
@@ -332,7 +339,7 @@ body.sheet-open .sheet-handle .caret{transform:rotate(180deg)}
 @media (max-width:900px){
   /* Formenleiste: aus der linken Spalte wird ein horizontaler Streifen */
   .shape-sidebar{
-    top:40px;left:0;right:0;width:auto;height:46px;
+    top:calc(40px + var(--sat));left:0;right:0;width:auto;height:46px;
     flex-direction:row;align-items:stretch;
     border-right:none;border-bottom:1px solid var(--brd);
     overflow-x:auto;overflow-y:hidden;
@@ -345,18 +352,23 @@ body.sheet-open .sheet-handle .caret{transform:rotate(180deg)}
   .sh-btn.active{border-bottom-color:var(--acc)}
 
   /* Canvas bekommt die volle Breite, unten bleibt der Sheet-Griff frei */
-  .layout{top:86px;left:0;bottom:40px;grid-template-columns:1fr}
+  .layout{top:calc(86px + var(--sat));left:0;bottom:calc(40px + var(--sab));grid-template-columns:1fr}
 
   /* Panel wird zum ausfahrbaren Bottom-Sheet */
   .right{
     top:auto;left:0;right:0;bottom:0;width:auto;
     height:min(62vh,440px);z-index:98;
     border-left:none;border-top:1px solid var(--brd);
-    padding-bottom:env(safe-area-inset-bottom,0px);
-    transform:translateY(calc(100% - 40px));
+    padding-bottom:var(--sab);
+    /* Sichtbar bleibt der 40px-Griff plus der Streifen fuer den Home-Indicator. */
+    transform:translateY(calc(100% - 40px - var(--sab)));
     transition:transform .25s ease;
   }
   body.sheet-open .right{transform:translateY(0)}
+  /* Geschlossen deckt der Griff den Home-Indicator mit ab, sonst lugt die
+     Panel-Ueberschrift darunter hervor. Offen braucht er die Hoehe nicht. */
+  .sheet-handle{height:calc(40px + var(--sab));padding-bottom:var(--sab)}
+  body.sheet-open .sheet-handle{height:40px;padding-bottom:0}
   /* Sheet offen: der Canvas weicht nach oben aus statt sich zu verstecken */
   body.sheet-open .layout{bottom:min(62vh,440px)}
   .sheet-handle{display:flex}
