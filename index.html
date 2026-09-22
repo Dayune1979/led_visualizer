@@ -434,11 +434,16 @@ body.sheet-open .sheet-handle .caret{transform:rotate(180deg)}
         <span style="font-size:12px;color:var(--acc);min-width:24px;font-family:'Space Mono',monospace;font-weight:700" id="matrixScrollSpdV">10</span>
       </div>
     </div>
+    <!-- Abzeichen je Segment; updateBadges() fuellt sie und setzt den Effektnamen -->
+    <div class="seg-badges-ov" id="segBadgesOv"></div>
     <div class="zoom-btns">
       <button class="zbtn" onclick="zoom(1.15)" title="Zoom in">+</button>
       <button class="zbtn" onclick="zoom(0.87)" title="Zoom out">−</button>
       <button class="zbtn" onclick="zoomReset()" title="Zoom zurücksetzen" style="font-size:11px">⊡</button>
       <button class="zbtn" id="rotResetBtn" onclick="rotReset()" title="Auto-Rotation aktiv" style="font-size:12px;color:var(--green);border-color:var(--green)">↺</button>
+      <button class="zbtn" id="attractBtn" onclick="toggleAttract()" style="font-size:11px">&#9654;</button>
+      <button class="zbtn" id="linkBtn" onclick="linkKopieren()" title="Link zu dieser Ansicht kopieren" style="font-size:12px">&#128279;</button>
+      <button class="zbtn" id="fsBtn" onclick="toggleVollbild()" title="Vollbild" style="font-size:12px">&#9974;</button>
     </div>
   </div>
 
@@ -2579,6 +2584,19 @@ function setShape(key){
   }
   var btns=document.querySelectorAll('#shapeBar .sh-btn');
   for(var i=0;i<btns.length;i++)btns[i].classList.toggle('active',btns[i].getAttribute('data-shape')===key);
+  /* Auf dem Handy ist die Formenleiste ein schmaler Streifen. Ohne das hier
+     bliebe die aktive Form beim Umschalten per Preset oder Vorfuehrmodus
+     ausserhalb des Sichtfelds - man saehe nicht, was gerade laeuft.
+     scrollIntoView reicht dafuer nicht zuverlaessig, also gerechnet. */
+  var leiste=document.getElementById('shapeBar');
+  var aktiverKnopf=document.querySelector('#shapeBar .sh-btn.active');
+  if(leiste&&aktiverKnopf&&leiste.scrollWidth>leiste.clientWidth+1){
+    var ziel=aktiverKnopf.offsetLeft-(leiste.clientWidth-aktiverKnopf.offsetWidth)/2;
+    ziel=Math.max(0,Math.min(ziel,leiste.scrollWidth-leiste.clientWidth));
+    /* Ohne 'smooth': die weiche Animation wird hier regelmaessig unterbrochen
+       und bleibt auf halbem Weg stehen. Direktes Setzen sitzt. */
+    leiste.scrollLeft=ziel;
+  }
   rotX=0.0;rotY=0.0;autoRot=true;
   /* if lab is running, inject __lab__ before building UI so buttons reflect it */
   if(labActive){
@@ -3022,6 +3040,232 @@ function buildSolidPresets(){
     el.appendChild(d);
   });
 }
+/* ============================================================
+   PRESET-LINKS, VORFUEHRMODUS, WAKE LOCK, VOLLBILD
+   ============================================================ */
+
+/* ---- Preset: der Zustand, den ein Link tragen muss ----
+   Bewusst nicht alles: Lab-Effekte und Solid-Farben (Schluessel mit '__')
+   haengen an Einstellungen, die kein Hash traegt - die bleiben aussen vor. */
+function presetLesen(){
+  var seg=shapeSegState[currentShape]||[];
+  var s0=seg[0]||{};
+  var sh=SHAPES[currentShape];
+  var p={shape:currentShape};
+  if(s0.effect  && s0.effect.indexOf('__')!==0)  p.fx =s0.effect;
+  if(s0.palette && s0.palette.indexOf('__')!==0) p.pal=s0.palette;
+  if(sh.type==='helix')        p.mode=sh.mode;
+  else if(sh.type==='cube')    p.mode=cubeVersion;
+  else if(sh.type==='football')p.mode=fbWiringMode;
+  p.spd=speed;
+  p.bri=~~(brightness*255);
+  return p;
+}
+
+function effektGueltig(sh,id){
+  var liste=sh.type==='helix'?sh.effects[sh.mode]:sh.effects;
+  if(!liste)return false;
+  for(var i=0;i<liste.length;i++)if(liste[i].id===id)return true;
+  return false;
+}
+
+function presetAnwenden(p){
+  if(!p||!p.shape||!SHAPES[p.shape])return false;
+  _presetLaeuft=true;
+  setShape(p.shape);
+  var sh=SHAPES[currentShape];
+  if(p.mode){
+    if(sh.type==='helix'&&(p.mode==='P'||p.mode==='M'))      setHelixMode(p.mode);
+    else if(sh.type==='cube'&&(p.mode==='linear'||p.mode==='parallel')) setCubeMode(p.mode);
+    else if(sh.type==='football')                            setFbWiringMode(p.mode);
+  }
+  /* Nach einem Moduswechsel kann sich die Segmentzahl geaendert haben. */
+  activeSeg.clear();
+  SHAPES[currentShape].segments.forEach(function(s,i){activeSeg.add(i)});
+  /* Effekt und Palette gegen die Form pruefen. Ein Link kann alt sein oder
+     einen Effekt tragen, den diese Form in dieser Verdrahtung nicht kennt -
+     dann bleibt der gespeicherte Effekt stehen, statt einen Namen anzuzeigen,
+     zu dem es kein Muster gibt. */
+  var fxOk =!!(p.fx  && effektGueltig(SHAPES[currentShape],p.fx));
+  var palOk=!!(p.pal && PALETTES[p.pal]);
+  activeSeg.forEach(function(sid){
+    var st=shapeSegState[currentShape][sid];
+    if(!st)return;
+    if(fxOk) st.effect =p.fx;
+    if(palOk)st.palette=p.pal;
+  });
+  var spd=parseInt(p.spd,10), bri=parseInt(p.bri,10);
+  if(!isNaN(spd)&&spd>=1&&spd<=20){
+    speed=spd;
+    document.getElementById('spdS').value=spd;
+    document.getElementById('spdV').textContent=spd;
+  }
+  if(!isNaN(bri)&&bri>=0&&bri<=255){
+    brightness=bri/255;
+    document.getElementById('briS').value=bri;
+    document.getElementById('briV').textContent=bri;
+  }
+  saveCtrl(currentShape);
+  buildSegChips();refreshFxActive();refreshPalActive();updateBadges();
+  _presetLaeuft=false;
+  return true;
+}
+
+var _presetLaeuft=false,_letzterHash=null;
+
+function presetSerialisieren(p){
+  var teile=[];
+  ['shape','fx','pal','mode','spd','bri'].forEach(function(k){
+    if(p[k]!==undefined&&p[k]!==null&&p[k]!=='')teile.push(k+'='+encodeURIComponent(p[k]));
+  });
+  return teile.join('&');
+}
+
+function hashLesen(){
+  var h=location.hash.replace(/^#/,'');
+  if(!h)return null;
+  var p={};
+  h.split('&').forEach(function(paar){
+    var i=paar.indexOf('=');
+    if(i>0)p[paar.slice(0,i)]=decodeURIComponent(paar.slice(i+1));
+  });
+  return p.shape?p:null;
+}
+
+/* replaceState statt location.hash: sonst waechst die History bei jedem
+   Klick, und der Zurueck-Button wird unbrauchbar. */
+function hashSchreiben(){
+  if(_presetLaeuft)return;
+  var s=presetSerialisieren(presetLesen());
+  if(s===_letzterHash)return;
+  _letzterHash=s;
+  try{history.replaceState(null,'','#'+s)}catch(e){}
+}
+
+/* Ein Hash-Wechsel bei geoeffneter App laedt die Seite nicht neu - das Init
+   laeuft also nicht noch einmal. Ohne diesen Zuhoerer bliebe ein geteilter
+   Link wirkungslos, sobald die App schon offen ist, und das Intervall
+   ueberschriebe ihn nach kurzer Zeit mit dem alten Zustand. */
+window.addEventListener('hashchange',function(){
+  var p=hashLesen();
+  if(!p)return;
+  var s=presetSerialisieren(p);
+  if(s===_letzterHash)return;   /* von hashSchreiben selbst gesetzt */
+  _letzterHash=s;
+  presetAnwenden(p);
+});
+
+/* ---- Vorfuehrmodus ---- */
+var attractAn=false,attractTimer=null,attractSchritt=0;
+var ATTRACT_SEK=18;
+
+function attractWeiter(){
+  var formen=Object.keys(SHAPES);
+  attractSchritt++;
+  var key=formen[attractSchritt%formen.length];
+  setShape(key);
+  /* Erst nach einer vollen Runde durch alle Formen den Effekt weiterdrehen -
+     sonst sieht man jede Form nur mit einem einzigen Muster. */
+  var runde=Math.floor(attractSchritt/formen.length);
+  var sh=SHAPES[key];
+  var liste=sh.type==='helix'?sh.effects[sh.mode]:sh.effects;
+  if(liste&&liste.length){
+    var ef=liste[runde%liste.length];
+    activeSeg.forEach(function(sid){
+      if(shapeSegState[key][sid])shapeSegState[key][sid].effect=ef.id;
+    });
+    refreshFxActive();updateBadges();
+  }
+}
+
+function attractKnopfAktualisieren(){
+  var b=document.getElementById('attractBtn');
+  if(!b)return;
+  b.innerHTML=attractAn?'&#9632;':'&#9654;';
+  b.style.color      =attractAn?'var(--green)':'var(--lbl)';
+  b.style.borderColor=attractAn?'var(--green)':'var(--brd2)';
+  b.title=attractAn?'Vorfuehrmodus laeuft - klicken zum Stoppen'
+                   :'Vorfuehrmodus: wechselt alle '+ATTRACT_SEK+' Sekunden Form und Effekt';
+}
+
+function toggleAttract(){
+  attractAn=!attractAn;
+  if(attractAn){
+    attractSchritt=0;
+    autoRot=true;updateRotBtn();
+    attractTimer=setInterval(attractWeiter,ATTRACT_SEK*1000);
+    wakeLockHolen();
+  }else{
+    clearInterval(attractTimer);attractTimer=null;
+    wakeLockFreigeben();
+  }
+  attractKnopfAktualisieren();
+}
+
+/* ---- Wake Lock: waehrend der Vorfuehrung soll der Bildschirm anbleiben ---- */
+var wakeLock=null;
+
+function wakeLockHolen(){
+  if(!('wakeLock' in navigator))return;
+  navigator.wakeLock.request('screen').then(function(w){
+    wakeLock=w;
+    w.addEventListener('release',function(){wakeLock=null});
+  }).catch(function(){/* Akkusparmodus lehnt ab - kein Grund fuer einen Fehler */});
+}
+
+function wakeLockFreigeben(){
+  if(wakeLock){wakeLock.release().catch(function(){});wakeLock=null}
+}
+
+/* Ein Wake Lock geht verloren, sobald die App in den Hintergrund geht.
+   Kommt sie zurueck und die Vorfuehrung laeuft noch, wird er neu geholt. */
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible'&&attractAn&&!wakeLock)wakeLockHolen();
+});
+
+/* ---- Vollbild ---- */
+function vollbildMoeglich(){
+  return !!(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen);
+}
+
+function toggleVollbild(){
+  var d=document.documentElement;
+  if(!document.fullscreenElement&&!document.webkitFullscreenElement){
+    (d.requestFullscreen||d.webkitRequestFullscreen).call(d).catch(function(){});
+  }else{
+    (document.exitFullscreen||document.webkitExitFullscreen).call(document);
+  }
+}
+
+/* ---- Link kopieren ---- */
+function linkKopieren(){
+  hashSchreiben();
+  var b=document.getElementById('linkBtn');
+  var fertig=function(ok){
+    if(!b)return;
+    var alt=b.style.color;
+    b.style.color=ok?'var(--green)':'#f07060';
+    setTimeout(function(){b.style.color=alt},900);
+  };
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(location.href).then(function(){fertig(true)},function(){fertig(false)});
+  }else{
+    fertig(false);
+  }
+}
+
+/* ---- Start ---- */
+function phase3Init(){
+  if(!vollbildMoeglich()){
+    var fb=document.getElementById('fsBtn');
+    if(fb)fb.style.display='none';
+  }
+  attractKnopfAktualisieren();
+  /* Der Hash wird nicht bei jedem Klick geschrieben, sondern regelmaessig
+     nachgezogen - so erwischt er auch Wege, die an keinem Handler haengen. */
+  setInterval(hashSchreiben,800);
+}
+
 buildShapeBar();
 setShape('pineapple');
 resizeCanvas();
@@ -3046,6 +3290,11 @@ updateRotBtn();
 _initialized=true;
 labInitUI();
 buildSolidPresets();
+
+/* Ein Preset aus dem Link schlaegt den Startzustand - dafuer ist es da. */
+var startPreset=hashLesen();
+if(startPreset)presetAnwenden(startPreset);
+phase3Init();
 requestAnimationFrame(animate);
 </script>
 </body>
