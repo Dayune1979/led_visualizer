@@ -2,7 +2,7 @@
    Strategie: Navigation network-first (damit ein Deploy ankommt),
    alles andere cache-first mit opportunistischem Nachcachen. */
 
-var VERSION = 'v3';
+var VERSION = 'v4';
 var CACHE   = 'led-unikate-' + VERSION;
 
 var ASSETS = [
@@ -18,7 +18,17 @@ var ASSETS = [
 self.addEventListener('install', function (e) {
   e.waitUntil(
     caches.open(CACHE)
-      .then(function (c) { return c.addAll(ASSETS); })
+      .then(function (c) {
+        /* Nicht c.addAll: das geht durch den HTTP-Cache und wuerde beim
+           Nachinstallieren womoeglich genau die alten Dateien einfrieren,
+           die dieser Deploy ersetzen soll. cache:'reload' holt sie frisch. */
+        return Promise.all(ASSETS.map(function (u) {
+          return fetch(u, { cache: 'reload' }).then(function (res) {
+            if (!res.ok) throw new Error('Precache fehlgeschlagen: ' + u);
+            return c.put(u, res);
+          });
+        }));
+      })
       .then(function () { return self.skipWaiting(); })
   );
 });
@@ -39,8 +49,20 @@ self.addEventListener('fetch', function (e) {
   if (req.method !== 'GET') return;
 
   if (req.mode === 'navigate') {
+    /* GitHub Pages liefert HTML mit Cache-Control: max-age=600 aus. Ein
+       schlichtes fetch(req) geht durch den HTTP-Cache und geben damit zehn
+       Minuten lang die alte Seite zurueck - network-first waere in Wahrheit
+       cache-first. Deshalb no-store: die Seite selbst kommt immer frisch,
+       offline faengt der Cache sie ab. */
     e.respondWith(
-      fetch(req).catch(function () { return caches.match('./index.html'); })
+      fetch(req.url, { cache: 'no-store' })
+        .then(function (res) {
+          if (!res || !res.ok) throw new Error('kein brauchbares Dokument');
+          var copy = res.clone();
+          caches.open(CACHE).then(function (c) { c.put('./index.html', copy); });
+          return res;
+        })
+        .catch(function () { return caches.match('./index.html'); })
     );
     return;
   }
